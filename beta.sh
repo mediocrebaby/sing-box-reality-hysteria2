@@ -1211,7 +1211,7 @@ while :; do
             "mtu": 1280,
             "peers": [
               {
-                "address": "162.159.192.1,
+                "address": "162.159.192.1",
                 "port": 2408,
                 "public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
                 "allowed_ips": [
