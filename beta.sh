@@ -113,7 +113,7 @@ install_pkgs() {
 install_shortcut() {
   cat > /root/sbox/mianyang.sh << EOF
 #!/usr/bin/env bash
-bash <(curl -fsSL https://github.com/vveg26/sing-box-reality-hysteria2/raw/main/beta.sh) \$1
+bash <(curl -fsSL https://github.com/mediocrebaby/sing-box-reality-hysteria2/raw/main/beta.sh \$1
 EOF
   chmod +x /root/sbox/mianyang.sh
   ln -sf /root/sbox/mianyang.sh /usr/bin/mianyang
@@ -947,32 +947,9 @@ process_warp(){
                     current_option="unknow!"
                     ;;
             esac
-            warp_mode=$(awk -F= '/^WARP_MODE/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}' /root/sbox/config)
-            case $warp_mode in
-                0)
-                    current_mode="Ipv6优先"
-                    current_mode1="warp-IPv6-prefer-out"
-                    ;;
-                1)
-                    current_mode="Ipv4优先"
-                    current_mode1="warp-IPv4-prefer-out"
-                    ;;
-                2)
-                    current_mode="Ipv6仅允许"
-                    current_mode1="warp-IPv6-out"
-                    ;;
-                3)
-                    current_mode="Ipv4仅允许"
-                    current_mode1="warp-IPv4-out"
-                    ;;
-                *)
-                    current_option="unknow!"
-                    ;;
-            esac
             echo ""
             warning "warp分流已经开启"
             echo ""
-            hint "当前模式为: $current_mode"
             hint "当前状态为: $current_option"
             echo ""
             info "请选择选项："
@@ -992,63 +969,8 @@ process_warp(){
             reload_singbox
           ;;
           2)
-            jq --arg current_mode1 "$current_mode1" '.route.final = $current_mode1' /root/sbox/sbconfig_server.json > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp /root/sbox/sbconfig_server.json
+            jq  '.route.final = "wireguard-out"' /root/sbox/sbconfig_server.json > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp /root/sbox/sbconfig_server.json
             sed -i "s/WARP_OPTION=.*/WARP_OPTION=1/" /root/sbox/config
-            reload_singbox
-            ;;
-          4)
-          while :; do
-              warning "请选择需要切换的warp策略"
-              echo ""
-              hint "当前状态为: $current_option"
-              echo ""
-              info "请选择切换的选项："
-              echo ""
-              info "1. Ipv6优先(默认)"
-              info "2. Ipv4优先"
-              info "3. 仅允许Ipv6"
-              info "4. 仅允许Ipv4"
-              info "0. 退出"
-              echo ""
-
-              read -p "请输入对应数字（0-4）: " user_input
-              user_input=${user_input:-1}
-              case $user_input in
-                  1)
-                      warp_out="warp-IPv6-prefer-out"
-                      sed -i "s/WARP_MODE=.*/WARP_MODE=0/" /root/sbox/config
-                      break
-                      ;;
-                  2)
-                      warp_out="warp-IPv4-prefer-out"
-                      sed -i "s/WARP_MODE=.*/WARP_MODE=1/" /root/sbox/config
-                      break
-                      ;;
-                  3)
-                      warp_out="warp-IPv6-out"
-                      sed -i "s/WARP_MODE=.*/WARP_MODE=2/" /root/sbox/config
-                      break
-                      ;;
-                  4)
-                      warp_out="warp-IPv4-out"
-                      sed -i "s/WARP_MODE=.*/WARP_MODE=3/" /root/sbox/config
-                      break
-                      ;;
-                  0)
-                      # Exit the loop if option 0 is selected
-                      echo "退出warp"
-                      exit 0
-                      ;;
-                  *)
-                      # Handle invalid input
-                      echo "无效的输入，请重新输入"
-                      ;;
-              esac
-          done
-            jq --arg warp_out "$warp_out" '.route.rules[].outbound |= $warp_out' /root/sbox/sbconfig_server.json > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp /root/sbox/sbconfig_server.json
-            if [ "$warp_option" -ne 0 ]; then
-              jq --arg warp_out "$warp_out" '.route.final = $warp_out' /root/sbox/sbconfig_server.json > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp /root/sbox/sbconfig_server.json
-            fi
             reload_singbox
             ;;
           3)
@@ -1244,66 +1166,21 @@ while :; do
              ;;
      esac
  done
-while :; do
-    warning "请选择需要设置的warp策略（默认v6优先）"
-    echo ""
-    info "请选择选项："
-    echo ""
-    info "1. Ipv6优先(默认)"
-    info "2. Ipv4优先"
-    info "3. 仅允许Ipv6"
-    info "4. 仅允许Ipv4"
-    info "0. 退出"
-    echo ""
 
-    read -p "请输入对应数字（0-4）: " user_input
-    user_input=${user_input:-1}
-    case $user_input in
-        1)
-            warp_out="warp-IPv6-prefer-out"
-            sed -i "s/WARP_MODE=.*/WARP_MODE=0/" /root/sbox/config
-            break
-            ;;
-        2)
-            warp_out="warp-IPv4-prefer-out"
-            sed -i "s/WARP_MODE=.*/WARP_MODE=1/" /root/sbox/config
-            break
-            ;;
-        3)
-            warp_out="warp-IPv6-out"
-            sed -i "s/WARP_MODE=.*/WARP_MODE=2/" /root/sbox/config
-            break
-            ;;
-        4)
-            warp_out="warp-IPv4-out"
-            sed -i "s/WARP_MODE=.*/WARP_MODE=3/" /root/sbox/config
-            break
-            ;;
-        0)
-            # Exit the loop if option 0 is selected
-            echo "退出warp"
-            exit 0
-            ;;
-        *)
-            # Handle invalid input
-            echo "无效的输入，请重新输入"
-            ;;
-    esac
-done
     # Command to modify the JSON configuration in-place
-    jq --arg private_key "$private_key" --arg v6 "$v6" --arg reserved "$reserved" --arg warp_out "$warp_out" '
+    jq --arg private_key "$private_key" --arg v6 "$v6" --arg reserved "$reserved" '
         .route = {
           "final": "direct",
           "rules": [
             {
               "rule_set": ["geosite-openai","geosite-netflix"],
-              "outbound": $warp_out
+              "outbound": wireguard-out
             },
             {
               "domain_keyword": [
                 "ipaddress"
               ],
-              "outbound": $warp_out
+              "outbound": wireguard-out
             }
           ],
           "rule_set": [
@@ -1322,32 +1199,7 @@ done
               "download_detour": "direct"
             }
           ]
-        } | .outbounds += [
-          {
-            "type": "direct",
-            "tag": "warp-IPv4-out",
-            "detour": "wireguard-out",
-            "domain_strategy": "ipv4_only"
-          },
-          {
-            "type": "direct",
-            "tag": "warp-IPv6-out",
-            "detour": "wireguard-out",
-            "domain_strategy": "ipv6_only"
-          },
-          {
-            "type": "direct",
-            "tag": "warp-IPv6-prefer-out",
-            "detour": "wireguard-out",
-            "domain_strategy": "prefer_ipv6"
-          },
-          {
-            "type": "direct",
-            "tag": "warp-IPv4-prefer-out",
-            "detour": "wireguard-out",
-            "domain_strategy": "prefer_ipv4"
-          }
-        ] | .endpoints += [
+        } |.endpoints += [
           {
             "type": "wireguard",
             "tag": "wireguard-out",
@@ -1535,7 +1387,7 @@ disable_hy2hopping(){
 }
 
 # 作者介绍
-print_with_delay "Reality Hysteria2 VmessArgo 三合一脚本 by 绵阿羊" 0.03
+print_with_delay "Reality Hysteria2 VmessArgo 三合一脚本 Create by 绵阿羊 Edit by mediocrebaby" 0.04
 echo ""
 echo ""
 #install pkgs
@@ -1687,8 +1539,6 @@ VMESS_PORT=$vmess_port
 ARGO_DOMAIN=''
 # Warp
 WARP_ENABLE=FALSE
-# 1 2 3 4
-WARP_MODE=1
 # 0 局部分流 1 全局分流
 WARP_OPTION=0
 EOF
