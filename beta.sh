@@ -1174,13 +1174,13 @@ while :; do
           "rules": [
             {
               "rule_set": ["geosite-openai","geosite-netflix"],
-              "outbound": wireguard-out
+              "outbound": "wireguard-out"
             },
             {
               "domain_keyword": [
                 "ipaddress"
               ],
-              "outbound": wireguard-out
+              "outbound": "wireguard-out"
             }
           ],
           "rule_set": [
