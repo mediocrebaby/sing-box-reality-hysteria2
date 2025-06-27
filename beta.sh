@@ -1199,7 +1199,7 @@ while :; do
               "download_detour": "direct"
             }
           ]
-        } |.endpoints += [
+        } |.endpoints = [
           {
             "type": "wireguard",
             "tag": "wireguard-out",
