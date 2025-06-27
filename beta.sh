@@ -1346,20 +1346,29 @@ done
             "tag": "warp-IPv4-prefer-out",
             "detour": "wireguard-out",
             "domain_strategy": "prefer_ipv4"
-          },
+          }
+        ] | .endpoints += [
           {
             "type": "wireguard",
             "tag": "wireguard-out",
-            "server": "162.159.192.1",
-            "server_port": 2408,
-            "local_address": [
+            "address": [
               "172.16.0.2/32",
               $v6 + "/128"
             ],
             "private_key": $private_key,
-            "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-            "reserved": $reserved,
-            "mtu": 1280
+            "mtu": 1280,
+            "peers": [
+              {
+                "address": "162.159.192.1,
+                "port": 2408,
+                "public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+                "allowed_ips": [
+                  "0.0.0.0/0",
+                  "::/0"
+                ],
+                "reserved": $reserved
+              }
+            ]
           }
         ]' "/root/sbox/sbconfig_server.json" > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp "/root/sbox/sbconfig_server.json"
 
@@ -1370,7 +1379,7 @@ done
 
 #关闭warp
 disable_warp(){
-    jq 'del(.route) | del(.outbounds[] | select(.tag == "warp-IPv4-out" or .tag == "warp-IPv6-out" or .tag == "warp-IPv4-prefer-out" or .tag == "warp-IPv6-prefer-out" or .tag == "wireguard-out"))' "/root/sbox/sbconfig_server.json" > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp "/root/sbox/sbconfig_server.json"
+    jq 'del(.route) | del (.endpoints) | del(.outbounds[] | select(.tag == "warp-IPv4-out" or .tag == "warp-IPv6-out" or .tag == "warp-IPv4-prefer-out" or .tag == "warp-IPv6-prefer-out" or .tag == "wireguard-out"))' "/root/sbox/sbconfig_server.json" > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp "/root/sbox/sbconfig_server.json"
     sed -i "s/WARP_ENABLE=TRUE/WARP_ENABLE=FALSE/" /root/sbox/config
     reload_singbox
 }
