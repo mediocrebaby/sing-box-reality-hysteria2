@@ -30,7 +30,6 @@ show_status(){
         p_latest_version=${p_latest_version_tag#v}  # Remove 'v' prefix from version number
 
         iswarp=$(grep '^WARP_ENABLE=' /root/sbox/config | cut -d'=' -f2)
-        hyhop=$(grep '^HY_HOPPING=' /root/sbox/config | cut -d'=' -f2)
 
         warning "SING-BOX服务状态信息:"
         hint "========================="
@@ -40,8 +39,7 @@ show_status(){
         info "singbox测试版最新版本: $p_latest_version"
         info "singbox正式版最新版本: $latest_version"
         info "singbox当前版本(输入4管理切换): $(/root/sbox/sing-box version 2>/dev/null | awk '/version/{print $NF}')"
-        info "warp流媒体解锁(输入6管理): $(if [ "$iswarp" == "TRUE" ]; then echo "开启"; else echo "关闭"; fi)"
-        info "hy2端口跳跃(输入7管理): $(if [ "$hyhop" == "TRUE" ]; then echo "开启"; else echo "关闭"; fi)"
+        info "WARP CLI集成(输入6管理): $(if [ "$iswarp" == "TRUE" ]; then echo "开启"; else echo "关闭"; fi)"
         hint "========================="
     else
         warning "SING-BOX 未运行！"
@@ -49,27 +47,7 @@ show_status(){
 
 }
 
-download_cloudflared(){
-  arch=$(uname -m)
-  # Map architecture names
-  case ${arch} in
-      x86_64)
-          cf_arch="amd64"
-          ;;
-      aarch64)
-          cf_arch="arm64"
-          ;;
-      armv7l)
-          cf_arch="arm"
-          ;;
-  esac
-
-  # install cloudflared linux
-  cf_url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cf_arch}"
-  curl -sLo "/root/sbox/cloudflared-linux" "$cf_url"
-  chmod +x /root/sbox/cloudflared-linux
-  echo ""
-}
+ 
 #show notice
 show_notice() {
     local message="$1"
@@ -113,7 +91,7 @@ install_pkgs() {
 install_shortcut() {
   cat > /root/sbox/mianyang.sh << EOF
 #!/usr/bin/env bash
-bash <(curl -fsSL https://github.com/mediocrebaby/sing-box-reality-hysteria2/raw/main/beta.sh) \$1
+bash <(curl -fsSL https://github.com/mediocrebaby/sing-box-reality/raw/main/beta.sh) \$1
 EOF
   chmod +x /root/sbox/mianyang.sh
   ln -sf /root/sbox/mianyang.sh /usr/bin/mianyang
@@ -245,25 +223,22 @@ modify_port() {
     done
     echo "$modified_port"
 }
-# client configuration
+
+# 覆盖上面旧版，精简为仅 Reality 输出
 show_client_configuration() {
-  # get ip
   server_ip=$(grep -o "SERVER_IP='[^']*'" /root/sbox/config | awk -F"'" '{print $2}')
   public_key=$(grep -o "PUBLIC_KEY='[^']*'" /root/sbox/config | awk -F"'" '{print $2}')
-  # reality
   reality_port=$(jq -r '.inbounds[] | select(.tag == "vless-in") | .listen_port' /root/sbox/sbconfig_server.json)
   reality_uuid=$(jq -r '.inbounds[] | select(.tag == "vless-in") | .users[0].uuid' /root/sbox/sbconfig_server.json)
   reality_server_name=$(jq -r '.inbounds[] | select(.tag == "vless-in") | .tls.server_name' /root/sbox/sbconfig_server.json)
   short_id=$(jq -r '.inbounds[] | select(.tag == "vless-in") | .tls.reality.short_id[0]' /root/sbox/sbconfig_server.json)
 
-
-  #聚合reality
   reality_link="vless://$reality_uuid@$server_ip:$reality_port?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$reality_server_name&fp=chrome&pbk=$public_key&sid=$short_id&type=tcp&headerType=none#SING-BOX-REALITY"
   echo ""
-  show_notice "Vision Reality通用链接 二维码 通用参数" 
+  show_notice "Vision Reality通用链接 二维码 通用参数"
   echo ""
   info "通用链接如下"
-  echo "" 
+  echo ""
   echo "$reality_link"
   echo ""
   info "二维码如下"
@@ -280,94 +255,9 @@ show_client_configuration() {
   echo "Short ID: $short_id"
   echo ""
 
-  # hy2
-  hy_port=$(jq -r '.inbounds[] | select(.tag == "hy2-in") | .listen_port' /root/sbox/sbconfig_server.json)
-  hy_server_name=$(grep -o "HY_SERVER_NAME='[^']*'" /root/sbox/config | awk -F"'" '{print $2}')
-  hy_password=$(jq -r '.inbounds[] | select(.tag == "hy2-in") | .users[0].password' /root/sbox/sbconfig_server.json)
-  # Generate the hy link
-  # Generate the hy link
-   ishopping=$(grep '^HY_HOPPING=' /root/sbox/config | cut -d'=' -f2)
-   if [ "$ishopping" = "FALSE" ]; then
-     hy2_link="hysteria2://$hy_password@$server_ip:$hy_port?insecure=1&sni=$hy_server_name"
-   else
-     iptables_rule=$(iptables -t nat -L -n -v | grep "udp" | grep -oP 'dpts:\K\d+:\d+')
-     ipv6tables_rule=$(ip6tables -t nat -L -n -v | grep "udp" | grep -oP 'dpts:\K\d+:\d+')
-     if [ -z "$iptables_rule" ] && [ -z "$ipv6tables_rule" ]; then
-         echo "未找到端口范围。"
-         exit 1
-     fi
-     output_range="${iptables_rule:-$ipv6tables_rule}"
-     formatted_range=$(echo "$output_range" | sed 's/:/-/')
-
-     hy2_link="hysteria2://$hy_password@$server_ip:$hy_port?insecure=1&sni=$hy_server_name&mport=${hy_port},${formatted_range}"
-   fi
-  echo ""
-  echo "" 
-  show_notice "Hysteria2通用链接 二维码 通用参数" 
-  echo ""
-  info "通用链接如下"
-  echo "" 
-  echo "$hy2_link"
-  echo ""
-  info "二维码如下"
-  echo ""
-  qrencode -t UTF8 $hy2_link  
-  echo ""
-  info "客户端通用参数如下"
-  echo ""
-  echo "服务器ip: $server_ip"
-  echo "端口号: $hy_port"
-  if [ "$ishopping" = "FALSE" ]; then
-     echo "端口跳跃未开启"
-   else
-     echo "跳跃端口为${formatted_range}"
-  fi
-  echo "密码password: $hy_password"
-  echo "域名SNI: $hy_server_name"
-  echo "跳过证书验证（允许不安全）: True"
-  echo ""
-  echo "" 
-  sleep 2
-  if [ -f "/root/sbox/argo.log" ]; then
-    cat /root/sbox/argo.log | grep trycloudflare.com | awk 'NR==2{print}' | awk -F// '{print $2}' | awk '{print $1}' | xargs -I {} sed -i "s/ARGO_DOMAIN='.*'/ARGO_DOMAIN='{}'/g" /root/sbox/config
-    rm -f /root/sbox/argo.log
-  fi
-  #argo域名
-  argo_domain=$(grep -o "ARGO_DOMAIN='[^']*'" /root/sbox/config | awk -F"'" '{print $2}')
-
-  vmess_uuid=$(jq -r '.inbounds[] | select(.tag == "vmess-in") | .users[0].uuid' /root/sbox/sbconfig_server.json)
-  ws_path=$(jq -r '.inbounds[] | select(.tag == "vmess-in") | .transport.path' /root/sbox/sbconfig_server.json)
-  
-  vmesswss_link='vmess://'$(echo '{"add":"icook.hk","aid":"0","host":"'$argo_domain'","id":"'$vmess_uuid'","net":"ws","path":"'${ws_path}?ed=2048'","port":"443","ps":"sing-box-vmess-tls","tls":"tls","type":"none","v":"2"}' | base64 -w 0)
-  vmessws_link='vmess://'$(echo '{"add":"icook.hk","aid":"0","host":"'$argo_domain'","id":"'$vmess_uuid'","net":"ws","path":"'${ws_path}?ed=2048'","port":"80","ps":"sing-box-vmess","tls":"","type":"none","v":"2"}' | base64 -w 0)
-  echo ""
-  echo ""
-  show_notice "vmess ws(s) 通用链接和二维码"
-  echo ""
-  echo ""
-  info "vmess wss通用链接,替换icook.hk为自己的优选ip可获得极致体验"
-  echo ""
-  echo "$vmesswss_link"
-  echo ""
-  info "vmess wss二维码"
-  echo ""
-  qrencode -t UTF8 $vmesswss_link
-  echo ""
-  info  "上述链接为wss 端口 443 可改为 2053 2083 2087 2096 8443"
-  echo ""
-  info "vmess ws链接，替换icook.hk为自己的优选ip可获得极致体验"
-  echo ""
-  echo "$vmessws_link"
-  echo ""
-  info "vmess ws 二维码"
-  echo ""
-  qrencode -t UTF8 $vmessws_link
-  echo ""
-  info "上述链接为ws 端口 80 可改为 8080 8880 2052 2082 2086 2095" 
-  echo ""
-  echo ""
-  show_notice "clash-meta配置参数"
-cat << EOF
+  # Clash Meta 示例（Reality-only）
+  show_notice "Clash Meta配置示例"
+  cat << EOF
 
 port: 7890
 allow-lan: true
@@ -397,7 +287,7 @@ dns:
     ipcidr:
       - 240.0.0.0/4
 
-proxies:        
+proxies:
   - name: Reality
     type: vless
     server: $server_ip
@@ -413,437 +303,19 @@ proxies:
       public-key: $public_key
       short-id: $short_id
 
-  - name: Hysteria2
-    type: hysteria2
-    server: $server_ip
-    port: $hy_port
-    #  up和down均不写或为0则使用BBR流控
-    # up: "30 Mbps" # 若不写单位，默认为 Mbps
-    # down: "200 Mbps" # 若不写单位，默认为 Mbps
-    password: $hy_password
-    sni: $hy_server_name
-    skip-cert-verify: true
-    alpn:
-      - h3
-  - name: Vmess
-    type: vmess
-    server: icook.hk
-    port: 443
-    uuid: $vmess_uuid
-    alterId: 0
-    cipher: auto
-    udp: true
-    tls: true
-    client-fingerprint: chrome  
-    skip-cert-verify: true
-    servername: $argo_domain
-    network: ws
-    ws-opts:
-      path: /${ws_path}?ed=2048
-      headers:
-        Host: $argo_domain
-
 proxy-groups:
   - name: 节点选择
     type: select
     proxies:
-      - 自动选择
       - Reality
-      - Hysteria2
-      - Vmess
       - DIRECT
 
-  - name: 自动选择
-    type: url-test #选出延迟最低的机场节点
-    proxies:
-      - Reality
-      - Hysteria2
-      - Vmess
-    url: "http://www.gstatic.com/generate_204"
-    interval: 300
-    tolerance: 50
-
-
 rules:
-    - GEOIP,LAN,DIRECT
-    - GEOIP,CN,DIRECT
-    - MATCH,节点选择
+  - GEOIP,LAN,DIRECT
+  - GEOIP,CN,DIRECT
+  - MATCH,节点选择
 
 EOF
-
-
-show_notice "sing-box1.8.0及以上客户端配置参数"
-cat << EOF
-{
-  "log": {
-    "level": "debug",
-    "timestamp": true
-  },
-  "experimental": {
-    "clash_api": {
-      "external_controller": "127.0.0.1:9090",
-      "external_ui_download_url": "",
-      "external_ui_download_detour": "",
-      "external_ui": "ui",
-      "secret": "",
-      "default_mode": "rule"
-    },
-    "cache_file": {
-      "enabled": true,
-      "store_fakeip": false
-    }
-  },
-  "dns": {
-    "servers": [
-      {
-        "tag": "proxyDns",
-        "address": "https://8.8.8.8/dns-query",
-        "detour": "proxy"
-      },
-      {
-        "tag": "localDns",
-        "address": "https://223.5.5.5/dns-query",
-        "detour": "direct"
-      },
-      {
-        "tag": "block",
-        "address": "rcode://success"
-      },
-      {
-        "tag": "remote",
-        "address": "fakeip"
-      }
-    ],
-    "rules": [
-      {
-        "domain": [
-          "ghproxy.com",
-          "cdn.jsdelivr.net",
-          "testingcf.jsdelivr.net"
-        ],
-        "server": "localDns"
-      },
-      {
-        "rule_set": "geosite-category-ads-all",
-        "server": "block"
-      },
-      {
-        "outbound": "any",
-        "server": "localDns",
-        "disable_cache": true
-      },
-      {
-        "rule_set": "geosite-cn",
-        "server": "localDns"
-      },
-      {
-        "clash_mode": "direct",
-        "server": "localDns"
-      },
-      {
-        "clash_mode": "global",
-        "server": "proxyDns"
-      },
-      {
-        "rule_set": "geosite-geolocation-!cn",
-        "server": "proxyDns"
-      },
-      {
-        "query_type": [
-          "A",
-          "AAAA"
-        ],
-        "server": "remote"
-      }
-    ],
-    "fakeip": {
-      "enabled": true,
-      "inet4_range": "198.18.0.0/15",
-      "inet6_range": "fc00::/18"
-    },
-    "independent_cache": true,
-    "strategy": "ipv4_only"
-  },
-  "inbounds": [
-    {
-      "type": "tun",
-      "inet4_address": "172.19.0.1/30",
-      "mtu": 9000,
-      "auto_route": true,
-      "strict_route": true,
-      "sniff": true,
-      "endpoint_independent_nat": false,
-      "stack": "system",
-      "platform": {
-        "http_proxy": {
-          "enabled": true,
-          "server": "127.0.0.1",
-          "server_port": 2080
-        }
-      }
-    },
-    {
-      "type": "mixed",
-      "listen": "127.0.0.1",
-      "listen_port": 2080,
-      "sniff": true,
-      "users": []
-    }
-  ],
-  "outbounds": [
-    {
-      "tag": "proxy",
-      "type": "selector",
-      "outbounds": [
-        "auto",
-        "direct",
-        "sing-box-reality",
-        "sing-box-hysteria2",
-        "sing-box-vmess"
-      ]
-    },
-    {
-      "type": "vless",
-      "tag": "sing-box-reality",
-      "uuid": "$reality_uuid",
-      "flow": "xtls-rprx-vision",
-      "packet_encoding": "xudp",
-      "server": "$server_ip",
-      "server_port": $reality_port,
-      "tls": {
-        "enabled": true,
-        "server_name": "$reality_server_name",
-        "utls": {
-          "enabled": true,
-          "fingerprint": "chrome"
-        },
-        "reality": {
-          "enabled": true,
-          "public_key": "$public_key",
-          "short_id": "$short_id"
-        }
-      }
-    },
-    {
-            "type": "hysteria2",
-            "server": "$server_ip",
-            "server_port": $hy_port,
-            "tag": "sing-box-hysteria2",
-            
-            "up_mbps": 100,
-            "down_mbps": 100,
-            "password": "$hy_password",
-            "tls": {
-                "enabled": true,
-                "server_name": "$hy_server_name",
-                "insecure": true,
-                "alpn": [
-                    "h3"
-                ]
-            }
-        },
-        {
-            "server": "icook.hk",
-            "server_port": 443,
-            "tag": "sing-box-vmess",
-            "tls": {
-                "enabled": true,
-                "server_name": "$argo_domain",
-                "insecure": true,
-                "utls": {
-                    "enabled": true,
-                    "fingerprint": "chrome"
-                }
-            },
-            "packet_encoding": "packetaddr",
-            "transport": {
-                "headers": {
-                    "Host": [
-                        "$argo_domain"
-                    ]
-                },
-                "path": "$ws_path",
-                "type": "ws",
-                "max_early_data": 2048,
-                "early_data_header_name": "Sec-WebSocket-Protocol"
-            },
-            "type": "vmess",
-            "security": "auto",
-            "uuid": "$vmess_uuid"
-        },
-    {
-      "tag": "direct",
-      "type": "direct"
-    },
-    {
-      "tag": "block",
-      "type": "block"
-    },
-    {
-      "tag": "dns-out",
-      "type": "dns"
-    },
-    {
-      "tag": "auto",
-      "type": "urltest",
-      "outbounds": [
-        "sing-box-reality",
-        "sing-box-hysteria2",
-        "sing-box-vmess"
-      ],
-      "url": "http://www.gstatic.com/generate_204",
-      "interval": "1m",
-      "tolerance": 50
-    },
-    {
-      "tag": "WeChat",
-      "type": "selector",
-      "outbounds": [
-        "direct",
-        "sing-box-reality",
-        "sing-box-hysteria2",
-        "sing-box-vmess"
-      ]
-    },
-    {
-      "tag": "Apple",
-      "type": "selector",
-      "outbounds": [
-        "direct",
-        "sing-box-reality",
-        "sing-box-hysteria2",
-        "sing-box-vmess"
-      ]
-    },
-    {
-      "tag": "Microsoft",
-      "type": "selector",
-      "outbounds": [
-        "direct",
-        "sing-box-reality",
-        "sing-box-hysteria2",
-        "sing-box-vmess"
-      ]
-    }
-  ],
-  "route": {
-    "auto_detect_interface": true,
-    "final": "proxy",
-    "rules": [
-      {
-        "protocol": "dns",
-        "outbound": "dns-out"
-      },
-      {
-        "network": "udp",
-        "port": 443,
-        "outbound": "block"
-      },
-      {
-        "rule_set": "geosite-category-ads-all",
-        "outbound": "block"
-      },
-      {
-        "clash_mode": "direct",
-        "outbound": "direct"
-      },
-      {
-        "clash_mode": "global",
-        "outbound": "proxy"
-      },
-      {
-        "domain": [
-          "clash.razord.top",
-          "yacd.metacubex.one",
-          "yacd.haishan.me",
-          "d.metacubex.one"
-        ],
-        "outbound": "direct"
-      },      
-      {
-        "rule_set": "geosite-wechat",
-        "outbound": "WeChat"
-      },
-      {
-        "rule_set": "geosite-geolocation-!cn",
-        "outbound": "proxy"
-      },
-      {
-        "ip_is_private": true,
-        "outbound": "direct"
-      },
-      {
-        "rule_set": "geoip-cn",
-        "outbound": "direct"
-      },
-      {
-        "rule_set": "geosite-cn",
-        "outbound": "direct"
-      },
-      {
-        "rule_set": "geosite-apple",
-        "outbound": "Apple"
-      },
-      {
-        "rule_set": "geosite-microsoft",
-        "outbound": "Microsoft"
-      }
-    ],
-    "rule_set": [
-      {
-        "tag": "geoip-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-geolocation-!cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-category-ads-all",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-wechat",
-        "type": "remote",
-        "format": "source",
-        "url": "https://testingcf.jsdelivr.net/gh/Toperlock/sing-box-geosite@main/wechat.json",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-apple",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/apple.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-microsoft",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/microsoft.srs",
-        "download_detour": "direct"
-      }
-    ]
-  }
-}
-EOF
-
 }
 
 #enable bbr
@@ -873,18 +345,11 @@ modify_singbox() {
     done
     echo "域名 $reality_server_name 符合."
     echo ""
-    # modifying hysteria2 configuration
-    warning "开始修改hysteria2端口号"
-    hy_current_port=$(jq -r '.inbounds[] | select(.tag == "hy2-in") | .listen_port' /root/sbox/sbconfig_server.json)
-    hy_port=$(modify_port "$hy_current_port")
-
     # 修改sing-box
     jq --arg reality_port "$reality_port" \
-    --arg hy_port "$hy_port" \
     --arg reality_server_name "$reality_server_name" \
     '
     (.inbounds[] | select(.tag == "vless-in") | .listen_port) |= ($reality_port | tonumber) |
-    (.inbounds[] | select(.tag == "hy2-in") | .listen_port) |= ($hy_port | tonumber) |
     (.inbounds[] | select(.tag == "vless-in") | .tls.server_name) |= $reality_server_name |
     (.inbounds[] | select(.tag == "vless-in") | .tls.reality.handshake.server) |= $reality_server_name
     ' /root/sbox/sbconfig_server.json > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp /root/sbox/sbconfig_server.json
@@ -897,27 +362,26 @@ modify_singbox() {
 uninstall_singbox() {
 
     warning "开始卸载..."
-    disable_hy2hopping
+    # 若存在 WARP 集成，先卸载 WARP
+    if has_warp_integration; then
+        info "检测到 WARP 集成，先执行关闭与卸载..."
+        disable_warp || true
+    fi
     # Stop and disable services
-    systemctl stop sing-box argo
-    systemctl disable sing-box argo > /dev/null 2>&1
+    systemctl stop sing-box
+    systemctl disable sing-box > /dev/null 2>&1
 
     # Remove service files
     rm -f /etc/systemd/system/sing-box.service
-    rm -f /etc/systemd/system/argo.service
 
     # Remove configuration and executable files
     rm -f /root/sbox/sbconfig_server.json
     rm -f /root/sbox/sing-box
     rm -f /usr/bin/mianyang
     rm -f /root/sbox/mianyang.sh
-    rm -f /root/sbox/cloudflared-linux
-    rm -f /root/sbox/self-cert/private.key
-    rm -f /root/sbox/self-cert/cert.pem
     rm -f /root/sbox/config
 
     # Remove directories
-    rm -rf /root/sbox/self-cert/
     rm -rf /root/sbox/
 
     echo "卸载完成"
@@ -1128,112 +592,222 @@ process_warp(){
         echo "配置文件更新成功"
     done
 }
-enable_warp(){
-while :; do
-     warning "请选择是否需要注册warp"
-     echo ""
-     info "请选择选项："
-     echo ""
-     info "1. 使用绵羊提供的warp节点(默认)"
-     info "2. 使用手动刷的warp节点"
-     info "0. 退出"
-     echo ""
-     read -p "请输入对应数字（0-2）: " user_input
-     user_input=${user_input:-1}
-     case $user_input in
-         1)
-             v6="2606:4700:110:87ad:b400:91:eadb:887f"
-             private_key="wIC19yRRSJkhVJcE09Qo9bE3P3PIwS3yyqyUnjwNO34="
-             reserved="XiBe"
-             break
-             ;;
-         2)
-             warning "开始注册warp..."
-             output=$(bash -c "$(curl -L warp-reg.vercel.app)")
-             v6=$(echo "$output" | grep -oP '"v6": "\K[^"]+' | awk 'NR==2')
-             private_key=$(echo "$output" | grep -oP '"private_key": "\K[^"]+')
-             reserved=$(echo "$output" | grep -oP '"reserved_str": "\K[^"]+')
-             break
-             ;;
-         0)
-             # Exit the loop if option 0 is selected
-             echo "退出"
-             exit 0
-             ;;
-         *)
-             # Handle invalid input
-             echo "无效的输入，请重新输入"
-             ;;
-     esac
- done
 
-    # Command to modify the JSON configuration in-place
-    jq --arg private_key "$private_key" --arg v6 "$v6" --arg reserved "$reserved" '
-        .route = {
-          "final": "direct",
-          "rules": [
-            {
-              "rule_set": ["geosite-openai","geosite-netflix"],
-              "outbound": "wireguard-out"
-            },
-            {
-              "domain_keyword": [
-                "ipaddress"
-              ],
-              "outbound": "wireguard-out"
-            }
-          ],
-          "rule_set": [
-            { 
-              "tag": "geosite-openai",
-              "type": "remote",
-              "format": "binary",
-              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/openai.srs",
-              "download_detour": "direct"
-            },
-            {
-              "tag": "geosite-netflix",
-              "type": "remote",
-              "format": "binary",
-              "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/netflix.srs",
-              "download_detour": "direct"
-            }
-          ]
-        } |.endpoints = [
-          {
-            "type": "wireguard",
-            "tag": "wireguard-out",
-            "address": [
-              "172.16.0.2/32",
-              $v6 + "/128"
-            ],
-            "private_key": $private_key,
-            "mtu": 1280,
-            "peers": [
-              {
-                "address": "162.159.192.1",
-                "port": 2408,
-                "public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-                "allowed_ips": [
-                  "0.0.0.0/0",
-                  "::/0"
-                ],
-                "reserved": $reserved
-              }
-            ]
-          }
-        ]' "/root/sbox/sbconfig_server.json" > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp "/root/sbox/sbconfig_server.json"
+# 安装warp-cli
+install_warp_cli(){
+    info "开始安装Cloudflare WARP CLI..."
 
-    sed -i "s/WARP_ENABLE=FALSE/WARP_ENABLE=TRUE/" /root/sbox/config
-    sed -i "s/WARP_OPTION=.*/WARP_OPTION=0/" /root/sbox/config
-    reload_singbox
+    # 检测系统架构
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)
+            ARCH="amd64"
+            ;;
+        aarch64)
+            ARCH="arm64"
+            ;;
+        *)
+            error "不支持的架构: $ARCH"
+            ;;
+    esac
+
+    # 下载并安装warp-cli
+    if [[ -f /etc/debian_version ]]; then
+        # Debian/Ubuntu系统
+        curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list
+        apt update
+        apt install -y cloudflare-warp
+    elif [[ -f /etc/redhat-release ]]; then
+        # RHEL/CentOS系统
+        curl -fsSl https://pkg.cloudflareclient.com/cloudflare-warp-ascii.repo | tee /etc/yum.repos.d/cloudflare-warp.repo
+        yum install -y cloudflare-warp
+    else
+        error "不支持的操作系统"
+    fi
+
+    info "WARP CLI安装完成"
 }
 
-#关闭warp
+# 配置warp-cli为SOCKS代理
+configure_warp_proxy(){
+    info "配置WARP CLI为SOCKS代理模式..."
+
+    # 检查warp-cli是否已安装
+    if ! command -v warp-cli &> /dev/null; then
+        install_warp_cli
+    fi
+
+    # 注册并配置warp
+    warp-cli registration new
+    warp-cli mode proxy
+    warp-cli connect
+
+    # 检查连接状态
+    sleep 3
+    if warp-cli status | grep -q "Connected"; then
+        info "WARP代理配置成功，监听端口: 40000"
+    else
+        error "WARP代理配置失败"
+    fi
+}
+
+enable_warp(){
+    warning "开始配置WARP CLI集成..."
+    echo ""
+    info "此功能将:"
+    info "1. 安装Cloudflare WARP CLI"
+    info "2. 配置为SOCKS代理模式"
+    info "3. 更新sing-box配置使用WARP出站"
+    echo ""
+
+    read -p "是否继续? (y/n, 默认: y): " confirm
+    confirm=${confirm:-y}
+
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        configure_warp_proxy
+
+        # 更新sing-box配置
+        jq '
+        # 添加warp SOCKS出站
+        .outbounds += [{
+            "type": "socks",
+            "tag": "warp-out",
+            "server": "127.0.0.1",
+            "server_port": 40000,
+            "version": "5"
+        }] |
+        # 添加路由规则
+        .route = {
+            "final": "direct",
+            "rules": [
+                {
+                    "rule_set": ["geosite-openai", "geosite-netflix"],
+                    "outbound": "warp-out"
+                },
+                {
+                    "domain_keyword": ["ipaddress"],
+                    "outbound": "warp-out"
+                }
+            ],
+            "rule_set": [
+                {
+                    "tag": "geosite-openai",
+                    "type": "remote",
+                    "format": "binary",
+                    "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/openai.srs",
+                    "download_detour": "direct"
+                },
+                {
+                    "tag": "geosite-netflix",
+                    "type": "remote",
+                    "format": "binary",
+                    "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/netflix.srs",
+                    "download_detour": "direct"
+                }
+            ]
+        }' "/root/sbox/sbconfig_server.json" > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp "/root/sbox/sbconfig_server.json"
+
+        # 创建warp-cli systemd服务（oneshot，避免守护进程退出导致重启循环）
+        cat > /etc/systemd/system/warp-proxy.service << EOF
+[Unit]
+Description=Cloudflare WARP Proxy (oneshot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+RemainAfterExit=yes
+ExecStart=/usr/bin/warp-cli mode proxy
+ExecStart=/usr/bin/warp-cli connect
+ExecStop=/usr/bin/warp-cli disconnect
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        systemctl daemon-reload
+        systemctl enable warp-proxy
+        systemctl start warp-proxy
+
+        sed -i "s/WARP_ENABLE=FALSE/WARP_ENABLE=TRUE/" /root/sbox/config
+        sed -i "s/WARP_OPTION=.*/WARP_OPTION=1/" /root/sbox/config
+        reload_singbox
+
+        info "WARP CLI集成配置完成!"
+    else
+        info "取消配置"
+    fi
+}
+
+# 判定是否存在 WARP 集成
+has_warp_integration(){
+    if [ -f /root/sbox/config ] && grep -q '^WARP_ENABLE=TRUE' /root/sbox/config 2>/dev/null; then
+        return 0
+    fi
+    if command -v warp-cli >/dev/null 2>&1; then
+        return 0
+    fi
+    if [ -f /etc/systemd/system/warp-proxy.service ]; then
+        return 0
+    fi
+    return 1
+}
+
+# 仅卸载 WARP 包和仓库（幂等）
+uninstall_warp_packages(){
+    info "卸载 WARP 客户端与仓库配置..."
+    if [[ -f /etc/debian_version ]]; then
+        apt purge -y cloudflare-warp >/dev/null 2>&1 || true
+        rm -f /etc/apt/sources.list.d/cloudflare-client.list || true
+        rm -f /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg || true
+        apt autoremove -y >/dev/null 2>&1 || true
+    elif [[ -f /etc/redhat-release ]]; then
+        yum remove -y cloudflare-warp >/dev/null 2>&1 || true
+        rm -f /etc/yum.repos.d/cloudflare-warp.repo || true
+    fi
+    info "WARP 客户端卸载完成（如原本未安装则忽略）。"
+}
+
+#关闭warp（作为完整卸载入口）
 disable_warp(){
-    jq 'del(.route) | del (.endpoints) | del(.outbounds[] | select(.tag == "warp-IPv4-out" or .tag == "warp-IPv6-out" or .tag == "warp-IPv4-prefer-out" or .tag == "warp-IPv6-prefer-out" or .tag == "wireguard-out"))' "/root/sbox/sbconfig_server.json" > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp "/root/sbox/sbconfig_server.json"
-    sed -i "s/WARP_ENABLE=TRUE/WARP_ENABLE=FALSE/" /root/sbox/config
-    reload_singbox
+    warning "开始关闭WARP集成..."
+
+    # 停止并禁用warp-cli服务
+    if systemctl is-active --quiet warp-proxy; then
+        systemctl stop warp-proxy
+        systemctl disable warp-proxy
+        rm -f /etc/systemd/system/warp-proxy.service
+        systemctl daemon-reload
+        info "WARP CLI服务已停止"
+    fi
+
+    # 断开warp连接
+    if command -v warp-cli &> /dev/null; then
+        warp-cli disconnect 2>/dev/null || true
+        info "WARP连接已断开"
+    fi
+
+    # 从sing-box配置中移除warp相关配置
+    if [ -f "/root/sbox/sbconfig_server.json" ]; then
+        jq 'del(.route) | del (.endpoints) | del(.outbounds[] | select(.tag == "warp-IPv4-out" or .tag == "warp-IPv6-out" or .tag == "warp-IPv4-prefer-out" or .tag == "warp-IPv6-prefer-out" or .tag == "wireguard-out" or .tag == "warp-out"))' "/root/sbox/sbconfig_server.json" > /root/sbox/sbconfig_server.temp && mv /root/sbox/sbconfig_server.temp "/root/sbox/sbconfig_server.json"
+    fi
+
+    if [ -f "/root/sbox/config" ]; then
+        sed -i "s/WARP_ENABLE=TRUE/WARP_ENABLE=FALSE/" /root/sbox/config || true
+        sed -i "s/^WARP_OPTION=.*/WARP_OPTION=0/" /root/sbox/config || true
+    fi
+
+    # 重载 sing-box（若已安装）
+    if command -v systemctl >/dev/null 2>&1; then
+        reload_singbox || true
+    fi
+
+    # 卸载 WARP 客户端与仓库
+    uninstall_warp_packages
+
+    info "WARP集成已完全关闭并卸载客户端"
 }
 #更新singbox
 update_singbox(){
@@ -1309,85 +883,10 @@ process_singbox() {
   done
 }
 
-process_hy2hopping(){
-
-        echo ""
-        echo ""
-        while true; do
-          ishopping=$(grep '^HY_HOPPING=' /root/sbox/config | cut -d'=' -f2)
-          if [ "$ishopping" = "FALSE" ]; then
-              warning "开始设置端口跳跃范围"
-              enable_hy2hopping       
-          else
-              warning "端口跳跃已开启"
-              echo ""
-              info "请选择选项："
-              echo ""
-              info "1. 关闭端口跳跃"
-              info "2. 重新设置"
-              info "3. 查看规则"
-              info "0. 退出"
-              echo ""
-              read -p "请输入对应数字（0-3）: " hopping_input
-              echo ""
-              case $hopping_input in
-                1)
-                  disable_hy2hopping
-                  echo "端口跳跃规则已删除"
-                  break
-                  ;;
-                2)
-                  disable_hy2hopping
-                  echo "端口跳跃规则已删除"
-                  echo "开始重新设置端口跳跃"
-                  enable_hy2hopping
-                  break
-                  ;;
-                3)
-                  # 查看NAT规则
-                  iptables -t nat -L -n -v | grep "udp"
-                  ip6tables -t nat -L -n -v | grep "udp"
-                  break
-                  ;;
-                0)
-                  echo "退出"
-                  break
-                  ;;
-                *)
-                  echo "无效的选项"
-                  ;;
-              esac
-          fi
-        done
-}
-# 开启hysteria2端口跳跃
-enable_hy2hopping(){
-    hint "开启端口跳跃..."
-    warning "注意: 端口跳跃范围不要覆盖已经占用的端口，否则会错误！"
-    hy_current_port=$(jq -r '.inbounds[] | select(.tag == "hy2-in") | .listen_port' /root/sbox/sbconfig_server.json)
-    read -p "输入UDP端口范围的起始值(默认50000): " -r start_port
-    start_port=${start_port:-50000}
-    read -p "输入UDP端口范围的结束值(默认51000): " -r end_port
-    end_port=${end_port:-51000}
-    iptables -t nat -A PREROUTING -i eth0 -p udp --dport $start_port:$end_port -j DNAT --to-destination :$hy_current_port
-    ip6tables -t nat -A PREROUTING -i eth0 -p udp --dport $start_port:$end_port -j DNAT --to-destination :$hy_current_port
-
-    sed -i "s/HY_HOPPING=FALSE/HY_HOPPING=TRUE/" /root/sbox/config
-
-
-}
-
-disable_hy2hopping(){
-  echo "关闭端口跳跃..."
-  iptables -t nat -F PREROUTING >/dev/null 2>&1
-  ip6tables -t nat -F PREROUTING >/dev/null 2>&1
-  sed -i "s/HY_HOPPING=TRUE/HY_HOPPING=FALSE/" /root/sbox/config
-    #TOREMOVE compatible with legacy users
-  sed -i "s/HY_HOPPING='TRUE'/HY_HOPPING=FALSE/" /root/sbox/config
-}
+ 
 
 # 作者介绍
-print_with_delay "Reality Hysteria2 VmessArgo 三合一脚本 Create by 绵阿羊 Edit by mediocrebaby" 0.04
+print_with_delay "Reality 单协议脚本 Create by mediocrebaby" 0.04
 echo ""
 echo ""
 #install pkgs
@@ -1395,7 +894,7 @@ install_pkgs
 # Check if reality.json, sing-box, and sing-box.service already exist
 if [ -f "/root/sbox/sbconfig_server.json" ] && [ -f "/root/sbox/config" ] && [ -f "/root/sbox/mianyang.sh" ] && [ -f "/usr/bin/mianyang" ] && [ -f "/root/sbox/sing-box" ] && [ -f "/etc/systemd/system/sing-box.service" ]; then
     echo ""
-    warning "sing-box-reality-hysteria2已安装"
+    warning "sing-box-reality已安装"
     show_status
     warning "请选择选项:"
     echo ""
@@ -1404,13 +903,11 @@ if [ -f "/root/sbox/sbconfig_server.json" ] && [ -f "/root/sbox/config" ] && [ -
     info "3. 显示客户端配置"
     info "4. sing-box基础操作"
     info "5. 一键开启bbr"
-    info "6. warp解锁操作"
-    info "7. hysteria2端口跳跃"
-    info "8. 重启argo隧道"
+    info "6. WARP CLI集成管理"
     info "0. 卸载"
     hint "========================="
     echo ""
-    read -p "请输入对应数字 (0-7): " choice
+    read -p "请输入对应数字 (0-6): " choice
 
     case $choice in
       1)
@@ -1439,17 +936,7 @@ if [ -f "/root/sbox/sbconfig_server.json" ] && [ -f "/root/sbox/config" ] && [ -
           process_warp
           exit 0
           ;;
-      7)
-          process_hy2hopping
-          exit 0
-          ;;
-      8)
-          systemctl stop argo
-          systemctl start argo
-          echo "重新启动完成，查看新的客户端信息"
-          show_client_configuration
-          exit 0
-          ;;
+      
       0)
           uninstall_singbox
 	        exit 0
@@ -1464,7 +951,6 @@ if [ -f "/root/sbox/sbconfig_server.json" ] && [ -f "/root/sbox/config" ] && [ -
 mkdir -p "/root/sbox/"
 
 install_singbox
-download_cloudflared
 
 echo ""
 echo ""
@@ -1481,8 +967,18 @@ short_id=$(/root/sbox/sing-box generate rand --hex 8)
 info "生成的uuid为:  $reality_uuid"
 info "生成的短id为:  $short_id"
 echo ""
-reality_port=$(generate_port)
-info "生成的端口号为: $reality_port"
+# Reality端口，默认443
+default_reality_port=443
+while :; do
+    read -p "请输入协议监听端口(默认: $default_reality_port): " user_input
+    reality_port=${user_input:-$default_reality_port}
+    if ss -tuln | grep -q ":$reality_port\b"; then
+        echo "端口 $reality_port 被占用，请输入其他端口"
+    else
+        break
+    fi
+done
+info "使用端口号: $reality_port"
 reality_server_name="itunes.apple.com"
 while :; do
     read -p "请输入需要偷取证书的网站，必须支持 TLS 1.3 and HTTP/2 (默认: $reality_server_name): " input_server_name
@@ -1497,32 +993,13 @@ done
 info "域名 $reality_server_name 符合."
 echo ""
 echo ""
-# hysteria2
-warning "开始配置hysteria2..."
-echo ""
-hy_password=$(/root/sbox/sing-box generate rand --hex 8)
-info "password: $hy_password"
-echo ""
-hy_port=$(generate_port)
-info "生成的端口号为: $hy_port"
-read -p "输入自签证书域名 (默认为: bing.com): " hy_server_name
-hy_server_name=${hy_server_name:-bing.com}
-mkdir -p /root/sbox/self-cert/ && openssl ecparam -genkey -name prime256v1 -out /root/sbox/self-cert/private.key && openssl req -new -x509 -days 36500 -key /root/sbox/self-cert/private.key -out /root/sbox/self-cert/cert.pem -subj "/CN=${hy_server_name}"
-info "自签证书生成完成,保存于/root/sbox/self-cert/"
-echo ""
-echo ""
-# vmess ws
-warning "开始配置vmess"
-echo ""
-# Generate hysteria necessary values
-vmess_uuid=$(/root/sbox/sing-box generate uuid)
-vmess_port=$(generate_port)
-info "生成的端口号为: $vmess_port"
-read -p "ws路径 (无需加斜杠,默认随机生成): " ws_path
-ws_path=${ws_path:-$(/root/sbox/sing-box generate rand --hex 6)}
-info "生成的path为: $ws_path"
 #get ip
 server_ip=$(curl -s4m8 ip.sb -k) || server_ip=$(curl -s6m8 ip.sb -k)
+
+# 备份旧配置（如存在）
+if [ -f /root/sbox/sbconfig_server.json ]; then
+  cp /root/sbox/sbconfig_server.json "/root/sbox/sbconfig_server.json.bak.$(date +%s)"
+fi
 
 #generate config
 cat > /root/sbox/config <<EOF
@@ -1530,42 +1007,13 @@ cat > /root/sbox/config <<EOF
 SERVER_IP='$server_ip'
 # Reality
 PUBLIC_KEY='$public_key'
-# Hysteria2
-HY_SERVER_NAME='$hy_server_name'
-HY_HOPPING=FALSE
-# Vmess
-VMESS_PORT=$vmess_port
-# Argo
-ARGO_DOMAIN=''
 # Warp
 WARP_ENABLE=FALSE
 # 0 局部分流 1 全局分流
 WARP_OPTION=0
 EOF
 
-echo "设置argo"
-cat > /etc/systemd/system/argo.service << EOF
-[Unit]
-Description=Cloudflare Tunnel
-After=network.target
-
-[Service]
-Type=simple
-NoNewPrivileges=yes
-TimeoutStartSec=0
-ExecStart=/bin/bash -c "/root/sbox/cloudflared-linux tunnel --url http://localhost:$vmess_port --no-autoupdate --edge-ip-version auto --protocol http2>/root/sbox/argo.log 2>&1 "
-Restart=on-failure
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
-
-EOF
-
-systemctl daemon-reload
-systemctl enable argo
-systemctl start argo
-systemctl restart argo
+ 
 
 #generate singbox server config
 cat > /root/sbox/sbconfig_server.json << EOF
@@ -1602,47 +1050,6 @@ cat > /root/sbox/sbconfig_server.json << EOF
           "short_id": ["$short_id"]
         }
       }
-    },
-    {
-        "sniff": true,
-        "sniff_override_destination": true,
-        "type": "hysteria2",
-        "tag": "hy2-in",
-        "listen": "::",
-        "listen_port": $hy_port,
-        "users": [
-            {
-                "password": "$hy_password"
-            }
-        ],
-        "tls": {
-            "enabled": true,
-            "alpn": [
-                "h3"
-            ],
-            "certificate_path": "/root/sbox/self-cert/cert.pem",
-            "key_path": "/root/sbox/self-cert/private.key"
-        }
-    },
-    {
-        "sniff": true,
-        "sniff_override_destination": true,
-        "type": "vmess",
-        "tag": "vmess-in",
-        "listen": "::",
-        "listen_port": $vmess_port,
-        "users": [
-            {
-                "uuid": "$vmess_uuid",
-                "alterId": 0
-            }
-        ],
-        "transport": {
-            "type": "ws",
-            "path": "$ws_path",
-            "max_early_data":2048,
-            "early_data_header_name":"Sec-WebSocket-Protocol"
-        }
     }
   ],
     "outbounds": [
