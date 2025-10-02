@@ -89,12 +89,12 @@ install_pkgs() {
   done
 }
 install_shortcut() {
-  cat > /root/sbox/mianyang.sh << EOF
+  cat > /root/sbox/mediocrebaby.sh << EOF
 #!/usr/bin/env bash
-bash <(curl -fsSL https://github.com/mediocrebaby/sing-box-reality/raw/main/beta.sh) \$1
+bash <(curl -fsSL https://github.com/mediocrebaby/sing-box-reality-hysteria2/raw/main/beta.sh) \$1
 EOF
-  chmod +x /root/sbox/mianyang.sh
-  ln -sf /root/sbox/mianyang.sh /usr/bin/mianyang
+  chmod +x /root/sbox/mediocrebaby.sh
+  ln -sf /root/sbox/mediocrebaby.sh /usr/bin/mediocrebaby
 
 }
 reload_singbox(){
