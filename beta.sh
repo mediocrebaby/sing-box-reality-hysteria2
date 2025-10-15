@@ -377,8 +377,8 @@ uninstall_singbox() {
     # Remove configuration and executable files
     rm -f /root/sbox/sbconfig_server.json
     rm -f /root/sbox/sing-box
-    rm -f /usr/bin/mediocrebaby
-    rm -f /root/sbox/mediocrebaby.sh
+    rm -f /usr/bin/mianyang
+    rm -f /root/sbox/mianyang.sh
     rm -f /root/sbox/config
 
     # Remove directories
@@ -892,7 +892,7 @@ echo ""
 #install pkgs
 install_pkgs
 # Check if reality.json, sing-box, and sing-box.service already exist
-if [ -f "/root/sbox/sbconfig_server.json" ] && [ -f "/root/sbox/config" ] && [ -f "/root/sbox/mianyang.sh" ] && [ -f "/usr/bin/mediocrebaby" ] && [ -f "/root/sbox/sing-box" ] && [ -f "/etc/systemd/system/sing-box.service" ]; then
+if [ -f "/root/sbox/sbconfig_server.json" ] && [ -f "/root/sbox/config" ] && [ -f "/root/sbox/mianyang.sh" ] && [ -f "/usr/bin/mianyang" ] && [ -f "/root/sbox/sing-box" ] && [ -f "/etc/systemd/system/sing-box.service" ]; then
     echo ""
     warning "sing-box-reality已安装"
     show_status
@@ -929,7 +929,6 @@ if [ -f "/root/sbox/sbconfig_server.json" ] && [ -f "/root/sbox/config" ] && [ -
           ;;
       5)
           enable_bbr
-          mianyang
           exit 0
           ;;
       6)
